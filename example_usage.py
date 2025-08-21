@@ -60,7 +60,7 @@ def example_usage():
     # Initialize generator with your API credentials
     generator = OutlineGenerator(
         api_url="https://ark.cn-beijing.volces.com/api/v3",
-        api_key="30a70266-37d5-4210-b8a2-34d5fb629230",
+        api_key="your-api-key-here",  # Replace with your actual API key
         model="ep-20250530104326-cc6vk",
         timeout=120
     )
