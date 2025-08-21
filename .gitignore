@@ -1,5 +1,6 @@
-# Output files and results
-outputs/
+# Output files and results (keep empty outputs folder)
+outputs/*
+!outputs/.gitkeep
 *.log
 *.jsonl
 
@@ -7,6 +8,9 @@ outputs/
 *.json
 !datasets/*.json
 !requirements.txt
+
+# Project documentation
+项目进展及debug报告.md
 
 # Python
 __pycache__/
