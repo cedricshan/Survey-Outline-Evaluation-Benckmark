@@ -21,7 +21,7 @@ This system provides an end-to-end solution for:
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/cedricshan/Survey-Outline-Evaluation-Benckmark.git
 cd Outline
 
 # Install dependencies
