@@ -17,9 +17,27 @@ from typing import Dict, List, Any, Optional
 import requests
 from tqdm import tqdm
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+def setup_logging(log_file=None):
+    """设置日志配置"""
+    if log_file:
+        # 如果指定了日志文件，输出到文件和控制台
+        logging.basicConfig(
+            level=logging.INFO, 
+            format='%(asctime)s - %(levelname)s - [OutlineGenerator] - %(message)s',
+            handlers=[
+                logging.FileHandler(log_file, encoding='utf-8'),
+                logging.StreamHandler()
+            ],
+            force=True
+        )
+    else:
+        # 默认只输出到控制台
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - [OutlineGenerator] - %(message)s')
+    
+    return logging.getLogger(__name__)
+
+# 默认日志配置
+logger = setup_logging()
 
 # Global lock for thread-safe file operations
 lock = threading.Lock()
@@ -392,8 +410,13 @@ def main():
                        help="Number of concurrent worker threads (default: 8)")
     parser.add_argument("--timeout", type=int, default=3600, 
                        help="API request timeout in seconds (default: 3600)")
+    parser.add_argument("--log_file", help="Log file path for unified logging")
     
     args = parser.parse_args()
+    
+    # 设置日志配置
+    global logger
+    logger = setup_logging(args.log_file)
     
     # Validate inputs
     if not os.path.exists(args.dataset_path):

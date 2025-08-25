@@ -11,20 +11,39 @@ from tqdm import tqdm
 import argparse
 from datetime import datetime
 
-# 创建日志目录
-os.makedirs("outputs/logs", exist_ok=True)
+def setup_logging(log_file=None):
+    """设置日志配置"""
+    if log_file:
+        # 如果指定了日志文件，输出到文件和控制台
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - [Evaluator] - %(message)s',
+            handlers=[
+                logging.FileHandler(log_file, encoding='utf-8'),
+                logging.StreamHandler()  # 同时输出到控制台
+            ],
+            force=True
+        )
+        log_filename = log_file
+    else:
+        # 创建独立的日志目录和文件
+        os.makedirs("outputs/logs", exist_ok=True)
+        log_filename = f"outputs/logs/evaluation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - [Evaluator] - %(message)s',
+            handlers=[
+                logging.FileHandler(log_filename, encoding='utf-8'),
+                logging.StreamHandler()  # 同时输出到控制台
+            ]
+        )
+    
+    logger = logging.getLogger(__name__)
+    logger.info(f"Log file: {log_filename}")
+    return logger
 
-# 配置日志到文件
-log_filename = f"outputs/logs/evaluation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_filename, encoding='utf-8'),
-        logging.StreamHandler()  # 同时输出到控制台
-    ]
-)
-logger = logging.getLogger(__name__)
+# 默认日志配置
+logger = setup_logging()
 
 # 创建全局锁，确保线程安全的文件操作
 lock = threading.Lock()
@@ -55,7 +74,6 @@ class Evaluator:
         )
         
         logger.info(f"Evaluator initialized with model: {judge_model}")
-        logger.info(f"Log file: {log_filename}")
     
     def process_outline(self, data_item):
         """处理单个大纲评估任务"""
@@ -516,7 +534,12 @@ def main():
     parser.add_argument('--use_sampling', action='store_true', help='是否启用采样')
     parser.add_argument('--sample_size', type=int, default=None, help='采样数量')
     parser.add_argument('--random_seed', type=int, default=42, help='随机种子')
+    parser.add_argument('--log_file', help='Log file path for unified logging')
     args = parser.parse_args()
+    
+    # 设置日志配置
+    global logger
+    logger = setup_logging(args.log_file)
 
     # 创建评估器实例
     evaluator = Evaluator(

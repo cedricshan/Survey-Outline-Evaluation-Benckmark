@@ -19,9 +19,36 @@ import argparse
 import logging
 import subprocess
 from pathlib import Path
+from datetime import datetime
 
-# 配置日志
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+def setup_logging():
+    """设置统一的日志配置"""
+    # 创建日志目录
+    os.makedirs("outputs/logs", exist_ok=True)
+    
+    # 创建带时间戳的日志文件名
+    log_filename = f"outputs/logs/pipeline_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    
+    # 配置日志格式
+    log_format = '%(asctime)s - %(levelname)s - [%(name)s] - %(message)s'
+    
+    # 配置日志处理器
+    logging.basicConfig(
+        level=logging.INFO,
+        format=log_format,
+        handlers=[
+            logging.FileHandler(log_filename, encoding='utf-8'),
+            logging.StreamHandler()  # 同时输出到控制台
+        ],
+        force=True  # 强制重新配置日志
+    )
+    
+    logger = logging.getLogger(__name__)
+    logger.info(f"Pipeline log file: {log_filename}")
+    return log_filename
+
+# 初始化日志
+log_filename = setup_logging()
 logger = logging.getLogger(__name__)
 
 def run_command(cmd, description):
@@ -78,14 +105,26 @@ def run_pipeline(args):
     logger.info("=" * 60)
     logger.info("开始运行完整的大纲生成和评测流水线")
     logger.info("=" * 60)
-    
     # 创建输出目录
     output_dir = "outputs/final_run"
     os.makedirs(output_dir, exist_ok=True)
     
+    logger.info(f"生成API: {args.api_url}")
+    logger.info(f"生成模型: {args.model}")
+    logger.info(f"评估API: {args.judge_api_url}")
+    logger.info(f"评估模型: {args.judge_model}")
+    logger.info(f"并发线程数: {args.num_workers}")
+    logger.info(f"输出目录: {output_dir}")
+    logger.info("=" * 60)
+    
     # 步骤1: 大纲生成
     logger.info("步骤1: 大纲生成")
     logger.info("-" * 40)
+    logger.info(f"输入数据集: datasets/test_prompts.json")
+    
+    # 定义输出文件路径
+    generation_output_file = os.path.join(output_dir, "generation.normalized.jsonl")
+    logger.info(f"输出文件: {generation_output_file}")
     
     generation_cmd = [
         sys.executable, "scripts/genrate_outlines.py",
@@ -95,7 +134,8 @@ def run_pipeline(args):
         "--save_dir", output_dir,
         "--dataset_path", "datasets/test_prompts.json",
         "--num_workers", str(args.num_workers),
-        "--timeout", "3600"
+        "--timeout", "3600",
+        "--log_file", log_filename
     ]
     
     if not run_command(generation_cmd, "大纲生成"):
@@ -103,7 +143,6 @@ def run_pipeline(args):
         return False
     
     # 检查生成结果
-    generation_output_file = os.path.join(output_dir, "generation.normalized.jsonl")
     if not os.path.exists(generation_output_file):
         logger.error(f"生成输出文件不存在: {generation_output_file}")
         return False
@@ -111,11 +150,14 @@ def run_pipeline(args):
     # 步骤2: 数据预处理
     logger.info("步骤2: 数据预处理")
     logger.info("-" * 40)
+    logger.info(f"输入文件: {generation_output_file}")
+    logger.info(f"输出文件: {os.path.join(output_dir, 'evaluation_input.jsonl')}")
     
     preprocess_cmd = [
         sys.executable, "scripts/eval_preprocessing.py",
         "--input", generation_output_file,
-        "--output", os.path.join(output_dir, "evaluation_input.jsonl")
+        "--output", os.path.join(output_dir, "evaluation_input.jsonl"),
+        "--log_file", log_filename
     ]
     
     if not run_command(preprocess_cmd, "数据预处理"):
@@ -131,6 +173,8 @@ def run_pipeline(args):
     # 步骤3: 大纲评估
     logger.info("步骤3: 大纲评估")
     logger.info("-" * 40)
+    logger.info(f"输入文件: {evaluation_input_file}")
+    logger.info(f"输出文件: {os.path.join(output_dir, 'evaluation_results.jsonl')}")
     
     evaluation_cmd = [
         sys.executable, "scripts/evaluate_llm.py",
@@ -139,7 +183,8 @@ def run_pipeline(args):
         "--judge_api_url", args.judge_api_url,
         "--judge_api_key", args.judge_api_key,
         "--judge_model", args.judge_model,
-        "--max_workers", str(args.num_workers)
+        "--max_workers", str(args.num_workers),
+        "--log_file", log_filename
     ]
     
     if not run_command(evaluation_cmd, "大纲评估"):
@@ -194,7 +239,7 @@ def run_pipeline(args):
         f.write(f"- 评估结果: {evaluation_output_file}\n")
         f.write(f"- 失败响应: {evaluation_output_file.replace('.jsonl', '_failed_responses.json')}\n")
         f.write(f"- 详细统计: outputs/score.json\n")
-        f.write(f"- 评估日志: outputs/logs/evaluation_*.log\n")
+        f.write(f"- 完整日志: {log_filename}\n")
         f.write(f"- 本报告: {report_file}\n")
     
     logger.info("=" * 60)

@@ -12,9 +12,27 @@ import argparse
 import logging
 from pathlib import Path
 
-# 配置日志
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+def setup_logging(log_file=None):
+    """设置日志配置"""
+    if log_file:
+        # 如果指定了日志文件，输出到文件和控制台
+        logging.basicConfig(
+            level=logging.INFO, 
+            format='%(asctime)s - %(levelname)s - [Preprocessor] - %(message)s',
+            handlers=[
+                logging.FileHandler(log_file, encoding='utf-8'),
+                logging.StreamHandler()
+            ],
+            force=True
+        )
+    else:
+        # 默认只输出到控制台
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - [Preprocessor] - %(message)s')
+    
+    return logging.getLogger(__name__)
+
+# 默认日志配置
+logger = setup_logging()
 
 def outline_to_text(outline_items):
     """
@@ -183,8 +201,13 @@ def main():
     parser.add_argument('--output', type=str, help='输出文件路径（可选，如果不指定则自动生成）')
     parser.add_argument('--outputs_dir', type=str, default='outputs', help='outputs目录路径')
     parser.add_argument('--batch', action='store_true', help='批量处理模式，处理所有找到的生成文件')
+    parser.add_argument('--log_file', help='Log file path for unified logging')
     
     args = parser.parse_args()
+    
+    # 设置日志配置
+    global logger
+    logger = setup_logging(args.log_file)
     
     if args.batch:
         # 批量处理模式
