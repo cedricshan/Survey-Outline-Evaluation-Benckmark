@@ -14,7 +14,6 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Any, Optional
-import requests
 from tqdm import tqdm
 
 def setup_logging(log_file=None):
@@ -60,22 +59,18 @@ class OutlineGenerator:
         self.model = model
         self.timeout = timeout
         
-        # Create session with larger connection pool
-        self.session = requests.Session()
-        
-        # Configure connection pool for high concurrency
-        adapter = requests.adapters.HTTPAdapter(
-            pool_connections=100,  # Increased from default 10
-            pool_maxsize=100,      # Increased from default 10
-            max_retries=0         # We handle retries manually
-        )
-        self.session.mount('http://', adapter)
-        self.session.mount('https://', adapter)
-        
-        self.session.headers.update({
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        })
+        # 统一使用 OpenAI 客户端
+        try:
+            from openai import OpenAI
+            self.client = OpenAI(
+                api_key=api_key, 
+                base_url=api_url,
+                timeout=timeout
+            )
+            logger.info(f"Using OpenAI client for API: {api_url}")
+        except ImportError:
+            logger.error("OpenAI library not found. Please install with: pip install openai")
+            raise ImportError("OpenAI library required")
     
     def filter_messages(self, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
         """
@@ -193,7 +188,7 @@ class OutlineGenerator:
     
     def call_api(self, messages: List[Dict[str, str]], max_retries: int = 5) -> Optional[str]:
         """
-        Call the API with retry logic.
+        Call the API using OpenAI client with retry logic.
         
         Args:
             messages: List of messages to send
@@ -209,49 +204,70 @@ class OutlineGenerator:
                 modified_messages[i]["content"] += "\n\nPlease respond in JSON format with the following structure: {\"topic\": \"...\", \"outline\": [{\"level\": 1, \"number\": \"1\", \"title\": \"...\", \"ref\": []}, ...]}"
                 break
         
-        payload = {
-            "model": self.model,
-            "messages": modified_messages,
-            "response_format": {"type": "json_object"}
-        }
-        
         for attempt in range(max_retries):
             try:
-                response = self.session.post(
-                    f"{self.api_url}/chat/completions",
-                    json=payload,
-                    timeout=self.timeout
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=modified_messages,
+                    response_format={"type": "json_object"}
                 )
                 
-                if response.status_code == 200:
-                    return response.json()["choices"][0]["message"]["content"]
-                elif response.status_code == 429:
-                    # Rate limit - exponential backoff
-                    wait_time = 2 ** attempt
+                return response.choices[0].message.content
+                
+            except Exception as e:
+                error_msg = str(e).lower()
+                
+                # 记录错误详情
+                logger.warning(f"API call failed on attempt {attempt + 1}/{max_retries}: {type(e).__name__}: {str(e)}")
+                
+                # 根据错误类型决定是否重试
+                if "rate limit" in error_msg or "429" in error_msg:
+                    # Rate limit - 指数退避重试
+                    wait_time = min(2 ** attempt, 60)  # 最大等待60秒
                     logger.warning(f"Rate limited, waiting {wait_time}s before retry")
                     time.sleep(wait_time)
                     continue
-                elif response.status_code >= 500:
-                    # Server error - exponential backoff
-                    wait_time = 2 ** attempt
-                    logger.warning(f"Server error {response.status_code}, waiting {wait_time}s before retry")
+                    
+                elif "timeout" in error_msg or "timed out" in error_msg:
+                    # 超时错误 - 指数退避重试
+                    wait_time = min(2 ** attempt, 30)  # 最大等待30秒
+                    logger.warning(f"Request timeout, waiting {wait_time}s before retry")
+                    if attempt < max_retries - 1:
+                        time.sleep(wait_time)
+                    continue
+                    
+                elif "server error" in error_msg or "500" in error_msg or "502" in error_msg or "503" in error_msg or "504" in error_msg:
+                    # 服务器错误 - 指数退避重试
+                    wait_time = min(2 ** attempt, 60)  # 最大等待60秒
+                    logger.warning(f"Server error, waiting {wait_time}s before retry")
                     time.sleep(wait_time)
                     continue
-                else:
-                    logger.error(f"API call failed with status {response.status_code}: {response.text}")
+                    
+                elif "quota" in error_msg or "billing" in error_msg or "payment" in error_msg:
+                    # 配额/计费错误 - 不重试
+                    logger.error(f"Quota/billing error, not retrying: {str(e)}")
                     return None
                     
-            except requests.exceptions.Timeout:
-                logger.warning(f"Request timeout on attempt {attempt + 1}")
-                if attempt < max_retries - 1:
-                    time.sleep(2 ** attempt)
-                continue
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Request failed on attempt {attempt + 1}: {e}")
-                if attempt < max_retries - 1:
-                    time.sleep(2 ** attempt)
-                continue
+                elif "invalid" in error_msg or "bad request" in error_msg or "400" in error_msg:
+                    # 请求参数错误 - 不重试
+                    logger.error(f"Invalid request error, not retrying: {str(e)}")
+                    return None
+                    
+                elif "authentication" in error_msg or "unauthorized" in error_msg or "401" in error_msg or "403" in error_msg:
+                    # 认证错误 - 不重试
+                    logger.error(f"Authentication error, not retrying: {str(e)}")
+                    return None
+                    
+                else:
+                    # 其他未知错误 - 指数退避重试
+                    wait_time = min(2 ** attempt, 30)  # 最大等待30秒
+                    logger.warning(f"Unknown error, waiting {wait_time}s before retry")
+                    if attempt < max_retries - 1:
+                        time.sleep(wait_time)
+                    continue
         
+        # 所有重试都失败了
+        logger.error(f"All {max_retries} attempts failed for API call")
         return None
     
     def process_item(self, item: Dict[str, Any], item_id: str, output_dir: str = ".") -> Dict[str, Any]:
@@ -398,7 +414,7 @@ def main():
     parser = argparse.ArgumentParser(description="Generate outlines from prompts using OpenAI-compatible APIs")
     
     # Required arguments
-    parser.add_argument("--api_url", required=True, help="OpenAI-compatible API URL (e.g., http://127.0.0.1:8000/v1)")
+    parser.add_argument("--api_url", required=True, help="OpenAI-compatible API URL")
     parser.add_argument("--api_key", required=True, help="API key for authentication")
     parser.add_argument("--model", required=True, help="Model name to use for generation")
     parser.add_argument("--save_dir", required=True, help="Output directory (will be created if not exists)")
