@@ -105,8 +105,9 @@ def run_pipeline(args):
     logger.info("=" * 60)
     logger.info("开始运行完整的大纲生成和评测流水线")
     logger.info("=" * 60)
-    # 创建输出目录
-    output_dir = "outputs/final_run"
+    # 自动生成带时间戳的唯一输出目录
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    output_dir = f"outputs/run_{timestamp}"
     os.makedirs(output_dir, exist_ok=True)
     
     logger.info(f"生成API: {args.api_url}")
