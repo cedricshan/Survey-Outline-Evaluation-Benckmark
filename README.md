@@ -17,6 +17,7 @@ This system provides an end-to-end solution for:
 - Required packages (see `requirements.txt`)
 - Access to OpenAI-compatible API endpoints
 
+
 ### Installation
 
 ```bash
@@ -43,7 +44,31 @@ python run.py \
   --judge_model "your-evaluation-model"
 ```
 
+### Human Outline Evaluation
+
+Evaluate human-written outlines using the same evaluation framework:
+
+```bash
+python scripts/evaluate_human_outlines.py \
+  --judge_api_url "your-evaluation-api-url" \
+  --judge_api_key "your-evaluation-api-key" \
+  --judge_model "your-evaluation-model" \
+  --max_workers 16
+```
+
 ## System Architecture
+
+### API Integration
+
+The system adopts **AiHubMix one-stop integration**, aggregating multiple models, while also being compatible with **Volcano Engine (VolcEngine)**. This unified approach supports evaluation of various model series including:
+
+- **OpenAI Models**: GPT-4, GPT-5-mini, GPT-5-nano
+- **Google Models**: Gemini 2.5 Flash
+- **Anthropic Models**: Claude series
+- **DeepSeek Models**: DeepSeek-V3.1, DeepSeek-R1
+- **Other Models**: Various specialized models through AiHubMix
+
+All API calls use OpenAI-compatible format, ensuring consistency and ease of integration.
 
 ### Core Components
 
@@ -83,6 +108,11 @@ python run.py \
   - Real-time progress monitoring
   - Comprehensive reporting
   - Error handling and recovery
+
+#### 5. Human Outline Evaluator (`scripts/evaluate_human_outlines.py`)
+- **Purpose**: Evaluates human-written outlines using the same evaluation framework
+- **Input**: Human-written outlines from `datasets/test_prompts.json`
+- **Output**: Evaluation results for human outlines
 
 ## Parameter Reference
 
@@ -200,14 +230,19 @@ Based on the above principles, literature review outline evaluation can be condu
 
 ```
 outputs/
-├── final_run/
+├── run_YYYYMMDD_HHMMSS/                     # Timestamped run directories
 │   ├── generation.normalized.jsonl          # Generated outline results
 │   ├── evaluation_input.jsonl               # Preprocessed evaluation input
 │   ├── evaluation_results.jsonl             # Evaluation results
 │   ├── evaluation_results_failed_responses.json  # Failed evaluation responses
 │   └── pipeline_report.txt                  # Pipeline execution report
-├── logs/
-│   └── evaluation_YYYYMMDD_HHMMSS.log       # Detailed evaluation logs
+├── run_human/                               # Human outline evaluation results
+│   ├── evaluation_input_human.jsonl         # Preprocessed human outline data
+│   └── evaluation_results_human.jsonl       # Human outline evaluation results
+├── logs/                                    # Unified logging directory
+│   ├── pipeline_YYYYMMDD_HHMMSS.log         # Pipeline execution logs
+│   ├── evaluation_YYYYMMDD_HHMMSS.log       # Evaluation logs
+│   └── evaluation_human_YYYYMMDD_HHMMSS.log # Human evaluation logs
 └── score.json                               # Comprehensive statistical analysis
 ```
 
@@ -257,9 +292,14 @@ Provides a comprehensive overview of the pipeline execution including:
 2. **Rate Limiting**: Reduce `num_workers` or implement longer delays
 3. **JSON Parsing Errors**: Check input data format and API response structure
 4. **Timeout Errors**: Increase timeout values for complex tasks
+5. **File Conflicts**: Ensure unique output directories when running multiple evaluations simultaneously
+6. **Human Outline Extraction Issues**: Verify `role="assistant"` content exists in `datasets/test_prompts.json`
+7. **API Compatibility**: Ensure all API endpoints use OpenAI-compatible format
 
 ### Debug Information
 
 - Check `outputs/logs/` for detailed execution logs
 - Review `evaluation_results_failed_responses.json` for failed evaluations
 - Examine `debug_failed_responses_*.json` for generation failures
+- Check `outputs/run_human/` for human outline evaluation results
+- Verify API endpoint compatibility and authentication
