@@ -385,7 +385,7 @@ class OutlineGenerator:
             # Submit all tasks
             future_to_item = {
                 executor.submit(self.process_item, item, str(i), os.path.dirname(output_file)): i 
-                for i, item in enumerate(data_items)
+                for i, item in enumerate(data_items, start=1)
             }
             
             # Process results with progress bar
