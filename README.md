@@ -114,6 +114,26 @@ All API calls use OpenAI-compatible format, ensuring consistency and ease of int
 - **Input**: Human-written outlines from `datasets/test_prompts.json`
 - **Output**: Evaluation results for human outlines
 
+#### 6. Pair Rewards Evaluator (`scripts/evaluate_pair_rewards.py`)
+- **Purpose**: Computes shape distance and reference accuracy between human and model outlines
+- **Input**: Human and model outline JSONL files
+- **Output**: Detailed comparison results with shape distance and reward metrics
+- **Features**:
+  - Zhang-Shasha tree edit distance for structural similarity
+  - Reference-based reward calculation using F-beta scores
+  - Multi-threaded processing for batch evaluation
+  - Automatic pairing by ID or topic matching
+
+#### 7. Shape Comparison (`scripts/compare_outlines_shape.py`)
+- **Purpose**: Compares outline structures using tree edit distance
+- **Input**: Human and model outline JSONL files
+- **Output**: Shape distance metrics for structural analysis
+
+#### 8. Reference Reward Calculator (`scripts/ref_reward.py`)
+- **Purpose**: Calculates content accuracy based on reference lists
+- **Input**: Section lists with reference information
+- **Output**: F-beta scores and length penalties for content evaluation
+
 ## Parameter Reference
 
 ### Generation Parameters
